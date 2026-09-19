@@ -1,0 +1,75 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Roulette" />
+<meta name="theme-color" content="#0B3D2E" />
+<title>Roulette Dealer Companion</title>
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<link rel="icon" href="./icons/icon-192.png" />
+<link rel="stylesheet" href="./css/style.css" />
+
+<div id="warnings" class="warnings" hidden></div>
+
+<header class="topbar">
+  <div class="status" id="status">Gewinnzahl eingeben</div>
+  <div class="history" id="history" aria-label="Letzte Zahlen"></div>
+  <div class="topbar-actions">
+    <button type="button" id="btn-settings" class="icon-btn" title="Einstellungen">&#9881;</button>
+    <button type="button" id="btn-fullscreen" class="icon-btn" title="Vollbild">&#9974;</button>
+  </div>
+</header>
+
+<main class="stage">
+  <section class="board">
+    <div class="tableau" id="tableau"></div>
+    <div class="betrow" id="dozens"></div>
+    <div class="betrow" id="outside"></div>
+  </section>
+
+  <aside class="panel">
+    <div class="results" id="results"></div>
+    <div class="totals">
+      <div class="total-label">Auszahlung gesamt</div>
+      <div class="total-value" id="total">0</div>
+      <div class="subtotals" id="subtotals"></div>
+    </div>
+    <div class="actions">
+      <button type="button" id="btn-undo" class="action">&#8630; Undo</button>
+      <button type="button" id="btn-change" class="action">Zahl &auml;ndern</button>
+    </div>
+    <button type="button" id="btn-next" class="next-round">N&auml;chste Runde</button>
+  </aside>
+</main>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-box" role="alertdialog" aria-modal="true">
+    <p class="modal-text" id="modal-text"></p>
+    <div class="modal-actions">
+      <button type="button" id="modal-cancel" class="action">Abbrechen</button>
+      <button type="button" id="modal-ok" class="action primary">Weiter</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="settings" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true">
+    <h2 class="modal-title">Grundeins&auml;tze</h2>
+    <label class="field-label">Au&szlig;enwetten
+      <input type="number" id="set-outside" min="0.01" step="1" inputmode="decimal" />
+    </label>
+    <label class="field-label">Einzelzahlen
+      <input type="number" id="set-number" min="0.01" step="1" inputmode="decimal" />
+    </label>
+    <p class="modal-note">Gilt nur bis zum Neuladen. Dauerhaft in <code>config.js</code> &auml;ndern.</p>
+    <div class="modal-actions">
+      <button type="button" id="settings-close" class="action">Schlie&szlig;en</button>
+      <button type="button" id="settings-apply" class="action primary">&Uuml;bernehmen</button>
+    </div>
+  </div>
+</div>
+
+<!-- config.js must load BEFORE the module: main.js reads window.ROULETTE_CONFIG synchronously. -->
+<script src="./config.js"></script>
+<script type="module" src="./js/main.js"></script>

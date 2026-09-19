@@ -1,0 +1,12 @@
+# Node (dev-only: the test runner is built in, nothing is installed)
+node_modules/
+*.log
+.env*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
