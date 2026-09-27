@@ -58,7 +58,7 @@ globalThis.document = {
   createTextNode: (t) => String(t),
 };
 
-const { buildTableau } = await import("../public/js/ui/tableau.js");
+const { buildTableau, rotate } = await import("../public/js/ui/tableau.js");
 const { render } = await import("../public/js/ui/render.js");
 const { createRound, setWinningNumber, addStake, undo, clearField } = await import("../public/js/domain/round.js");
 const { fieldById } = await import("../public/js/domain/wheel.js");
@@ -68,7 +68,8 @@ const CONFIG = { baseStakeOutside: 10, baseStakeNumber: 5, currencySymbol: "€"
 function mount(options) {
   const el = () => new El("div");
   const containers = { tableau: el(), lineList: el() };
-  const cells = buildTableau(containers, options);
+  // The 002/003 tests describe the upright felt; landscape tests say so explicitly.
+  const cells = buildTableau(containers, { orientation: "vertical", ...options });
   return {
     status: el(), results: el(), total: el(), subtotals: el(),
     btnUndo: el(), btnChange: el(), btnNext: el(), cells,
@@ -79,6 +80,8 @@ function mount(options) {
 // The map holds every element of a field; before line bets that is exactly one.
 const one = (els, id) => els.cells.get(id)[0];
 const firsts = (els) => [...els.cells].map(([id, list]) => [id, list[0]]);
+
+const ORIENTATIONS = ["vertical", "horizontal"];
 
 // Expands an element's inline grid placement ("2 / 4" is end-exclusive, "5" is
 // one track) into the "row|col" cells it covers.
@@ -99,6 +102,19 @@ function assertNoSharedCell(elements) {
     }
   }
 }
+
+test("rotate turns the vertical felt a quarter turn counter-clockwise (R-302)", () => {
+  for (const [from, n, to] of [
+    [{ row: "1", column: "2 / 5" }, 5, { row: "2 / 5", column: "1" }],
+    [{ row: "2", column: "2" }, 5, { row: "4", column: "2" }],
+    [{ row: "2", column: "4" }, 5, { row: "2", column: "2" }],
+    [{ row: "2 / 4", column: "1" }, 5, { row: "5", column: "2 / 4" }],
+    [{ row: "2 / 4", column: "5" }, 5, { row: "1", column: "2 / 4" }],
+    [{ row: "14", column: "2" }, 5, { row: "4", column: "14" }],
+    [{ row: "1", column: "3 / 8" }, 8, { row: "2 / 7", column: "1" }],
+    [{ row: "13", column: "2" }, 8, { row: "7", column: "13" }],
+  ]) assert.deepEqual(rotate(from, n), to, JSON.stringify(from));
+});
 
 test("the tableau builds all 49 fields", () => {
   const els = mount();
@@ -240,50 +256,76 @@ test("with lineBets on, every line has a placed zone on the tableau", () => {
   }
 });
 
-test("lines on: no two tableau elements share a grid cell", () => {
-  const els = mount({ lineBets: true });
-  assert.equal(els.cells.size, 157);
-  assert.equal([...els.cells.values()].flat().length, 268);
-  assert.equal(els.tableau.children.length, 160);
-  assertNoSharedCell(els.tableau.children);
-});
+// Landscape cells back to upright coordinates (inverse of rotate, N = 8), so
+// one set of geometric assertions covers both orientations.
+const upright = (r, c, orientation) => (orientation === "horizontal" ? [c, 9 - r] : [r, c]);
 
-test("lines on: zones sit between exactly their numbers (SC-003)", () => {
-  const els = mount({ lineBets: true });
-  const numberAt = new Map();
-  for (let n = 0; n <= 36; n++) for (const c of cellsOf(one(els, `n${n}`))) numberAt.set(c, n);
-  const at = (r, c) => numberAt.get(`${r}|${c}`);
-  const sorted = (xs) => [...new Set(xs.filter((x) => x !== undefined))].sort((a, b) => a - b);
+for (const orientation of ORIENTATIONS) {
+  test(`lines on: no two tableau elements share a grid cell (${orientation})`, () => {
+    const els = mount({ lineBets: true, orientation });
+    assert.equal(els.cells.size, 157);
+    assert.equal([...els.cells.values()].flat().length, 268);
+    assert.equal(els.tableau.children.length, 160);
+    assertNoSharedCell(els.tableau.children);
+  });
 
-  for (const id of lineIdsOf(els)) {
-    const field = fieldById(id);
-    const [r, c] = [Number(zoneOf(els, id).style.gridRow), Number(zoneOf(els, id).style.gridColumn)];
-    let found;
-    switch (field.type) {
-      case "split": case "corner": case "trio":
-        found = [-1, 0, 1].flatMap((dr) => [-1, 0, 1].map((dc) => at(r + dr, c + dc)));
-        break;
-      case "street":
-        assert.equal(c, 2, `${id} on the street edge`);
-        found = [3, 5, 7].map((col) => at(r, col));
-        break;
-      case "sixline":
-        assert.equal(c, 2, `${id} on the street edge`);
-        found = [r - 1, r + 1].flatMap((row) => [3, 5, 7].map((col) => at(row, col)));
-        break;
-      case "basket":
-        assert.deepEqual([r, c], [2, 2]);
-        continue;
+  test(`lines on: zones sit between exactly their numbers (SC-003, ${orientation})`, () => {
+    const els = mount({ lineBets: true, orientation });
+    const numberAt = new Map();
+    for (let n = 0; n <= 36; n++) {
+      for (const cell of cellsOf(one(els, `n${n}`))) {
+        const [r, c] = cell.split("|").map(Number);
+        numberAt.set(upright(r, c, orientation).join("|"), n);
+      }
     }
-    assert.deepEqual(sorted(found), [...field.numbers].sort((a, b) => a - b), `${id} at ${r}|${c}`);
-  }
+    const at = (r, c) => numberAt.get(`${r}|${c}`);
+    const sorted = (xs) => [...new Set(xs.filter((x) => x !== undefined))].sort((a, b) => a - b);
 
-  // The worked example of data-model section 4.
+    for (const id of lineIdsOf(els)) {
+      const field = fieldById(id);
+      const zone = zoneOf(els, id);
+      const [r, c] = upright(Number(zone.style.gridRow), Number(zone.style.gridColumn), orientation);
+      let found;
+      switch (field.type) {
+        case "split": case "corner": case "trio":
+          found = [-1, 0, 1].flatMap((dr) => [-1, 0, 1].map((dc) => at(r + dr, c + dc)));
+          break;
+        case "street":
+          assert.equal(c, 2, `${id} on the street edge`);
+          found = [3, 5, 7].map((col) => at(r, col));
+          break;
+        case "sixline":
+          assert.equal(c, 2, `${id} on the street edge`);
+          found = [r - 1, r + 1].flatMap((row) => [3, 5, 7].map((col) => at(row, col)));
+          break;
+        case "basket":
+          assert.deepEqual([r, c], [2, 2]);
+          continue;
+      }
+      assert.deepEqual(sorted(found), [...field.numbers].sort((a, b) => a - b), `${id} at ${r}|${c}`);
+    }
+  });
+}
+
+test("vertical, lines on: the worked example around 17 (003 data-model section 4)", () => {
+  const els = mount({ lineBets: true });
   assert.equal(place(one(els, "n17")), "13|5");
   for (const [id, cell] of [
     ["split-16-17", "13|4"], ["split-17-18", "13|6"], ["split-14-17", "12|5"], ["split-17-20", "14|5"],
     ["street-16-17-18", "13|2"], ["sixline-13-14-15-16-17-18", "12|2"], ["basket-0-1-2-3", "2|2"],
     ["trio-0-1-2", "2|4"], ["split-0-3", "2|7"],
+  ]) assert.equal(place(zoneOf(els, id)), cell, id);
+});
+
+test("horizontal, lines on: the worked example around 17 (data-model section 3b)", () => {
+  const els = mount({ lineBets: true, orientation: "horizontal" });
+  assert.ok(els.tableau.classList.contains("horizontal") && els.tableau.classList.contains("lines"));
+  assert.equal(place(one(els, "n17")), "4|13");
+  assert.equal(place(one(els, "n0")), "2 / 7|1");
+  for (const [id, cell] of [
+    ["split-16-17", "5|13"], ["split-17-18", "3|13"], ["split-14-17", "4|12"], ["split-17-20", "4|14"],
+    ["street-16-17-18", "7|13"], ["sixline-13-14-15-16-17-18", "7|12"], ["basket-0-1-2-3", "7|2"],
+    ["trio-0-1-2", "5|2"], ["split-0-3", "2|2"],
   ]) assert.equal(place(zoneOf(els, id)), cell, id);
 });
 
@@ -376,26 +418,51 @@ test("while picking a new number the list hides again and the hint returns", () 
 
 // ------------------------------------------------------- switched off (US4)
 
-test("lineBets false builds the French board: 49 ids, 52 elements", () => {
-  const els = mount({ lineBets: false });
-  assert.equal(els.cells.size, 49);
-  for (const [id, list] of els.cells) {
-    assert.equal(list.length, id.startsWith("dozen") ? 2 : 1, `${id} element count`);
-  }
-  const all = [...els.cells.values()].flat();
-  assert.equal(all.some((el) => el.classList.contains("zone") || el.classList.contains("pick")), false);
-  assert.equal(els.tableau.classList.contains("french"), true);
-  assert.equal(els.tableau.classList.contains("lines"), false);
-  for (const el of all) {
-    assert.ok(el.style.gridRow && el.style.gridColumn, `${el.dataset.fieldId} must be placed`);
-  }
-  assert.equal(els.lineList.children.length, 0);
-});
+for (const orientation of ORIENTATIONS) {
+  test(`lineBets false builds the French board: 49 ids, 52 elements (${orientation})`, () => {
+    const els = mount({ lineBets: false, orientation });
+    assert.equal(els.cells.size, 49);
+    for (const [id, list] of els.cells) {
+      assert.equal(list.length, id.startsWith("dozen") ? 2 : 1, `${id} element count`);
+    }
+    const all = [...els.cells.values()].flat();
+    assert.equal(all.some((el) => el.classList.contains("zone") || el.classList.contains("pick")), false);
+    assert.equal(els.tableau.classList.contains("french"), true);
+    assert.equal(els.tableau.classList.contains(orientation), true);
+    assert.equal(els.tableau.classList.contains("lines"), false);
+    for (const el of all) {
+      assert.ok(el.style.gridRow && el.style.gridColumn, `${el.dataset.fieldId} must be placed`);
+    }
+    assert.equal(els.lineList.children.length, 0);
+  });
 
-test("lines off: no two tableau elements share a grid cell", () => {
-  const els = mount({ lineBets: false });
-  assert.equal(els.tableau.children.length, 52);
-  assertNoSharedCell(els.tableau.children);
+  test(`lines off: no two tableau elements share a grid cell (${orientation})`, () => {
+    const els = mount({ lineBets: false, orientation });
+    assert.equal(els.tableau.children.length, 52);
+    assertNoSharedCell(els.tableau.children);
+  });
+}
+
+test("horizontal, lines off: placements follow the turned felt (FR-005-FR-007)", () => {
+  const els = mount({ lineBets: false, orientation: "horizontal" });
+  const at = (el) => `${el.style.gridRow}|${el.style.gridColumn}`;
+  const all = (id) => els.cells.get(id).map(at);
+  assert.equal(at(one(els, "n0")), "2 / 5|1");
+  assert.equal(at(one(els, "n1")), "4|2");
+  assert.equal(at(one(els, "n2")), "3|2");
+  assert.equal(at(one(els, "n3")), "2|2");
+  assert.equal(at(one(els, "n34")), "4|13");
+  assert.equal(at(one(els, "n36")), "2|13");
+  assert.deepEqual(all("high"), ["1|2 / 4"]);
+  assert.deepEqual(all("low"), ["5|2 / 4"]);
+  assert.deepEqual(all("dozen3"), ["5|12 / 14", "1|12 / 14"]);
+  assert.deepEqual(all("col1"), ["4|14"]);
+  assert.deepEqual(all("col3"), ["2|14"]);
+
+  // Turning the felt changes nothing about what wins.
+  render(setWinningNumber(createRound(), 17), CONFIG, els);
+  const winners = firsts(els).filter(([, c]) => c.dataset.state === "winner").map(([id]) => id);
+  assert.deepEqual(winners.sort(), ["black", "col2", "dozen2", "low", "n17", "odd"].sort());
 });
 
 test("lines off: placements follow the French felt (FR-001, FR-002, FR-005)", () => {

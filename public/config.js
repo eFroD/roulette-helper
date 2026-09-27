@@ -13,4 +13,5 @@ window.ROULETTE_CONFIG = {
   currencySymbol: "€", // wird hinter jeden Betrag gesetzt
   historyLength: 10, // Laenge der Zahlen-Historie; 0 blendet sie aus
   lineBets: true, // Wetten auf den Linien anbieten; false = Tableau ohne Linienwetten
+  orientation: "horizontal", // "horizontal" = Tableau quer (Breitbild), "vertical" = senkrecht wie am Tisch
 };

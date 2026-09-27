@@ -2,7 +2,11 @@
 
 A small web app that does the arithmetic for an amateur dealer at a private roulette party (play money, real chips). The dealer enters the winning number **after** the throw; the app highlights exactly the fields that win, locks every losing field so a lost bet cannot be entered at all, and shows stake, win, total and **win per chip** for each occupied field plus the round total. Line bets (split, street, corner, sixline, and the trios and basket at zero) are included: tap them on the line between the numbers, or pick them from a list of only the winning lines.
 
-The board is drawn as the **French felt** on the host's table, upright as the dealer sees it: 0 on top, twelve rows of three below, Manque / Pair / Rouge on the left, Passe / Impair / Noir on the right, P12 / M12 / D12 on both sides (each dozen is one bet, whichever side is tapped), the columns at the bottom. The result list names each outside bet in French with its German meaning, e.g. "Manque (1–18)".
+The board is drawn as the **French felt** on the host's table: Manque / Pair / Rouge on one long side, Passe / Impair / Noir on the other, P12 / M12 / D12 on both sides (each dozen is one bet, whichever side is tapped), the columns at the far end. Two orientations, set in `config.js`:
+
+- **`horizontal`** (default, for the widescreen laptop): the felt turned a quarter turn — 0 on the left, twelve columns of three with 1 at the bottom, Passe… along the top, Manque… along the bottom, the columns on the right.
+- **`vertical`**: upright as the dealer sees the table — 0 on top, twelve rows of three, Manque… on the left, Passe… on the right, the columns at the bottom.
+ The result list names each outside bet in French with its German meaning, e.g. "Manque (1–18)".
 
 No backend, no database, no accounts, no persistence. Nothing leaves the browser.
 
@@ -29,10 +33,11 @@ window.ROULETTE_CONFIG = {
   currencySymbol: "€",
   historyLength: 10,    // 0 hides the history strip
   lineBets: true,       // false = the French felt without line bets
+  orientation: "horizontal", // or "vertical"
 };
 ```
 
-`lineBets` must be a real `true` or `false`. The string `"false"` is treated as a typo: the app warns and keeps line bets on.
+`lineBets` must be a real `true` or `false`. The string `"false"` is treated as a typo: the app warns and keeps line bets on. `orientation` accepts `"horizontal"` or `"vertical"` (case and spaces don't matter); anything else, such as `"quer"`, gives a warning and the horizontal board.
 
 Every key is optional and each is validated independently. An invalid value falls back to its default and the app shows a warning naming the key — a typo can never leave a dealer facing a blank screen mid-party.
 
@@ -59,7 +64,7 @@ That rule is enforced by `tests/domain-purity.test.js`, which strips comments be
 
 ## On the tablet and the laptop
 
-- **Fullscreen**: use the ⛶ button in the app. Browsers require a tap for this, so it cannot happen automatically. The upright board is limited by screen height: on a 1366×768 laptop with line bets on it only fits in fullscreen (rows of 37 px); in a normal browser window the page scrolls a little.
+- **Fullscreen**: use the ⛶ button in the app. Browsers require a tap for this, so it cannot happen automatically. In `horizontal` the board fits a 1366×768 laptop in a normal browser window, line bets included. The `vertical` board is limited by screen height: there, with line bets on, it only fits in fullscreen (rows of 37 px).
 - **Home screen**: on iPad, Share → "Add to Home Screen" gives a chrome-less launch. Chrome's install prompt needs HTTPS and will not appear over plain LAN HTTP — see below.
 - **Screen sleep**: the app keeps the screen awake from the first tap onward. Please also raise the tablet's own screen-timeout setting as a backstop.
 

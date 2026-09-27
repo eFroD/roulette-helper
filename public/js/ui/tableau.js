@@ -2,6 +2,7 @@
 // Nothing here changes after build; render.js only updates state attributes.
 
 import { BET_FIELDS, fieldById } from "../domain/wheel.js";
+import { DEFAULT_CONFIG } from "../domain/config.js";
 
 function cell(field, extraClass = "") {
   const el = document.createElement("button");
@@ -37,7 +38,12 @@ function cell(field, extraClass = "") {
 //                      rows     1 zero | 2 h0 | row k at 2k+1 | line under row k at 2k+2 | 26 columns
 //
 // If the host's felt has the sides or the street edge the other way round,
-// the swap is here and nowhere else.
+// the swap is here and nowhere else - and it applies to both orientations.
+//
+// Landscape (004) is not a second layout: every placement below is computed
+// upright and then turned a quarter turn counter-clockwise by rotate(), so
+// the 0 lands on the left, 1 at the bottom, Manque & co. along the bottom
+// and the columns on the right. See specs/004-landscape-felt/research.md R-302.
 
 /** Top to bottom beside the numbers. The dozens appear on both sides. */
 export const LEFT_SIDE = Object.freeze(["low", "even", "red", "dozen1", "dozen2", "dozen3"]);
@@ -49,20 +55,42 @@ const lineCol = (j) => 2 * j + 1; // number column j with lines on: 3, 5, 7
 const EDGE = 2; // the street edge column with lines on
 const H0 = 2; // the line between 0 and 1-2-3 with lines on
 
-export function numberGridPlacement(n, { lineBets = false } = {}) {
-  if (n === 0) return { row: "1", column: lineBets ? "3 / 8" : "2 / 5" };
-  return lineBets
+const UPRIGHT_COLUMNS = { off: 5, on: 8 }; // columns of the upright grid
+
+/**
+ * Turns an upright placement a quarter turn counter-clockwise. Upright rows
+ * become columns unchanged; upright column c becomes row n+1-c, so a span
+ * "a / b" (end-exclusive) becomes "(n+2-b) / (n+2-a)".
+ */
+export function rotate({ row, column }, n) {
+  const [a, b] = String(column).split("/").map((x) => Number(x.trim()));
+  return {
+    row: b === undefined ? String(n + 1 - a) : `${n + 2 - b} / ${n + 2 - a}`,
+    column: row,
+  };
+}
+
+const orient = (placement, { lineBets = false, orientation = "vertical" } = {}) =>
+  orientation === "horizontal"
+    ? rotate(placement, lineBets ? UPRIGHT_COLUMNS.on : UPRIGHT_COLUMNS.off)
+    : placement;
+
+export function numberGridPlacement(n, opts = {}) {
+  const { lineBets = false } = opts;
+  if (n === 0) return orient({ row: "1", column: lineBets ? "3 / 8" : "2 / 5" }, opts);
+  return orient(lineBets
     ? { row: String(2 * rowOf(n) + 1), column: String(lineCol(colOf(n))) }
-    : { row: String(rowOf(n) + 1), column: String(colOf(n) + 1) };
+    : { row: String(rowOf(n) + 1), column: String(colOf(n) + 1) }, opts);
 }
 
 /** Every position of an outside bet: one for chances and columns, two for dozens (left first). */
-export function sideGridPlacements(fieldId, { lineBets = false } = {}) {
+export function sideGridPlacements(fieldId, opts = {}) {
+  const { lineBets = false } = opts;
   if (fieldId.startsWith("col")) {
     const j = Number(fieldId.slice(3));
-    return [lineBets
+    return [orient(lineBets
       ? { row: "26", column: String(lineCol(j)) }
-      : { row: "14", column: String(j + 1) }];
+      : { row: "14", column: String(j + 1) }, opts)];
   }
   const band = (i) => (lineBets ? `${3 + 4 * i} / ${6 + 4 * i}` : `${2 + 2 * i} / ${4 + 2 * i}`);
   const out = [];
@@ -70,11 +98,11 @@ export function sideGridPlacements(fieldId, { lineBets = false } = {}) {
   const right = RIGHT_SIDE.indexOf(fieldId);
   if (left >= 0) out.push({ row: band(left), column: "1" });
   if (right >= 0) out.push({ row: band(right), column: lineBets ? "8" : "5" });
-  return out;
+  return out.map((p) => orient(p, opts));
 }
 
 /** Where a line bet sits on the felt: the edge or corner between its numbers. */
-export function lineGridPlacement(field) {
+export function lineGridPlacement(field, { orientation = "vertical" } = {}) {
   const a = Math.min(...field.numbers.filter((n) => n > 0));
   const k = rowOf(a);
   const c = lineCol(colOf(a));
@@ -94,7 +122,7 @@ export function lineGridPlacement(field) {
     case "basket": [row, column] = [H0, EDGE]; break;
     default: throw new Error(`unknown line type ${field.type}`);
   }
-  return { row: String(row), column: String(column) };
+  return orient({ row: String(row), column: String(column) }, { lineBets: true, orientation });
 }
 
 function placeAt(el, { row, column }) {
@@ -131,10 +159,13 @@ function pick(field) {
  * its zone AND its list entry - and render applies one state to all of them,
  * so two positions of one bet can never disagree.
  */
-export function buildTableau({ tableau, lineList }, { lineBets = false } = {}) {
+export function buildTableau(
+  { tableau, lineList },
+  { lineBets = false, orientation = DEFAULT_CONFIG.orientation } = {},
+) {
   tableau.replaceChildren();
-  tableau.classList.add("french");
-  const opts = { lineBets };
+  tableau.classList.add("french", orientation);
+  const opts = { lineBets, orientation };
 
   for (let n = 0; n <= 36; n++) {
     const el = cell(fieldById(`n${n}`), n === 0 ? "zero" : "");
@@ -155,7 +186,7 @@ export function buildTableau({ tableau, lineList }, { lineBets = false } = {}) {
     tableau.classList.add("lines");
     for (const field of BET_FIELDS.filter((f) => f.kind === "line")) {
       const el = zone(field);
-      placeAt(el, lineGridPlacement(field));
+      placeAt(el, lineGridPlacement(field, opts));
       tableau.append(el);
     }
   }

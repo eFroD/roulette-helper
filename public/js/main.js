@@ -37,11 +37,12 @@ const els = {
   lineList: $("line-list"),
   cells: buildTableau(
     { tableau: $("tableau"), lineList: $("line-list") },
-    { lineBets: config.lineBets },
+    { lineBets: config.lineBets, orientation: config.orientation },
   ),
 };
 els.lineList.hidden = !config.lineBets;
 document.querySelector(".stage").classList.toggle("lines", config.lineBets);
+document.querySelector(".stage").classList.add(config.orientation);
 
 initDialogs();
 initFullscreen($("btn-fullscreen"));

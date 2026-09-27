@@ -16,6 +16,7 @@ test("valid values are taken as given", () => {
   });
   assert.deepEqual(config, {
     baseStakeOutside: 20, baseStakeNumber: 2, currencySymbol: "$", historyLength: 5, lineBets: true,
+    orientation: "horizontal",
   });
   assert.deepEqual(warnings, []);
 });
@@ -81,4 +82,26 @@ test("an invalid lineBets leaves valid siblings untouched", () => {
   const { config } = resolveConfig({ lineBets: "off", baseStakeNumber: 2, currencySymbol: "CHF" });
   assert.equal(config.baseStakeNumber, 2);
   assert.equal(config.currencySymbol, "CHF");
+});
+
+test("orientation: default horizontal, both values accepted and normalised", () => {
+  assert.equal(resolveConfig({}).config.orientation, "horizontal");
+  for (const [raw, expected] of [
+    ["vertical", "vertical"], [" Horizontal ", "horizontal"], ["VERTICAL", "vertical"], ["horizontal", "horizontal"],
+  ]) {
+    const { config, warnings } = resolveConfig({ orientation: raw });
+    assert.equal(config.orientation, expected, JSON.stringify(raw));
+    assert.deepEqual(warnings, []);
+  }
+});
+
+test("invalid orientation falls back to horizontal with one warning, siblings unaffected", () => {
+  for (const bad of ["quer", "senkrecht", "", true, 1, null]) {
+    const { config, warnings } = resolveConfig({ orientation: bad });
+    assert.equal(config.orientation, "horizontal", JSON.stringify(bad));
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes("orientation"), "the warning names the key");
+  }
+  const { config } = resolveConfig({ orientation: "quer", baseStakeNumber: 7 });
+  assert.equal(config.baseStakeNumber, 7);
 });

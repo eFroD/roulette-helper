@@ -7,13 +7,19 @@ export const DEFAULT_CONFIG = Object.freeze({
   currencySymbol: "€",
   historyLength: 10,
   lineBets: true,
+  orientation: "horizontal",
 });
+
+/** How the felt lies on screen: across a widescreen, or upright as on the table. */
+export const ORIENTATIONS = Object.freeze(["horizontal", "vertical"]);
 
 const isPositiveAmount = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 const isNonEmptyString = (v) => typeof v === "string" && v.trim().length > 0;
 const isCount = (v) => Number.isInteger(v) && v >= 0;
 // Strictly boolean: the string "false" is a typo to warn about, not a falsy value.
 const isBoolean = (v) => v === true || v === false;
+// Case and stray spaces are forgiven: " Horizontal " can only mean one thing.
+const isOrientation = (v) => typeof v === "string" && ORIENTATIONS.includes(v.trim().toLowerCase());
 
 const RULES = [
   { key: "baseStakeOutside", valid: isPositiveAmount, expected: "eine Zahl groesser als 0" },
@@ -21,6 +27,10 @@ const RULES = [
   { key: "currencySymbol", valid: isNonEmptyString, expected: "ein nicht-leerer Text", normalise: (v) => v.trim() },
   { key: "historyLength", valid: isCount, expected: "eine ganze Zahl ab 0" },
   { key: "lineBets", valid: isBoolean, expected: "true oder false" },
+  {
+    key: "orientation", valid: isOrientation, expected: '"horizontal" oder "vertical"',
+    normalise: (v) => v.trim().toLowerCase(),
+  },
 ];
 
 /**
