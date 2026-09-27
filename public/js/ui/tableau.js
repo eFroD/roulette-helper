@@ -13,7 +13,7 @@ function cell(field, extraClass = "") {
 
   const label = document.createElement("span");
   label.className = "cell-label";
-  label.textContent = field.label;
+  label.textContent = field.feltLabel ?? field.label;
   el.append(label);
 
   const taps = document.createElement("span");
@@ -23,59 +23,75 @@ function cell(field, extraClass = "") {
   return el;
 }
 
-/**
- * Builds the board and returns Map<fieldId, HTMLElement[]>. A field can have
- * more than one element (a line has its zone AND its list entry); render
- * applies one state to all of them, so the two routes can never disagree.
- *
- * With lineBets false (the default) the output is exactly the pre-line board.
- */
-// ------------------------------------------------------- line-bet geometry
+// ------------------------------------------------------------ felt geometry
 //
-// With line bets on, the number area becomes an interleaved grid: thin line
-// tracks sit between the number tracks, and every line bet owns exactly one
-// thin grid cell. Grid items do not overlap unless told to, so no zone can
-// ever steal a tap from a number cell (FR-021) - by construction, not by
-// pixel arithmetic. See specs/002-line-bets/research.md R-103.
+// The French felt, as the dealer sees it on the table: 0 on top, twelve rows
+// of three below it, the even chances flanking the numbers, the dozens on both
+// sides, the columns at the bottom. Everything - numbers, outside bets, line
+// zones - is one grid and every item is placed explicitly, so no two items can
+// share a cell by construction (specs/003-french-layout/research.md R-201).
 //
-// Columns: 1 zero | 2 v0 | 3 c1 | 4 v1 | ... | 24 v11 | 25 c12 | 26 2:1
-// Rows:    1 r3 (3,6..36) | 2 h32 | 3 r2 | 4 h21 | 5 r1 (1,4..34) | 6 hb (edge)
-const ROW_OF_NUMBER = { 0: 1, 2: 3, 1: 5 }; // n % 3 -> row track
-const H32 = 2;
-const H21 = 4;
-const EDGE = 6;
-const V0 = 2;
-const street = (n) => Math.floor((n - 1) / 3);
-const numberColumn = (n) => 2 * street(n) + 3;
-const lineColumnAfter = (n) => 2 * street(n) + 4; // the line right of n's street
+// Lines off (5 x 14):  columns  1 L | 2 c1 | 3 c2 | 4 c3 | 5 R
+//                      rows     1 zero | 2..13 number rows | 14 columns
+// Lines on  (8 x 26):  columns  1 L | 2 E (streets) | 3 c1 | 4 v12 | 5 c2 | 6 v23 | 7 c3 | 8 R
+//                      rows     1 zero | 2 h0 | row k at 2k+1 | line under row k at 2k+2 | 26 columns
+//
+// If the host's felt has the sides or the street edge the other way round,
+// the swap is here and nowhere else.
 
-export function numberGridPlacement(n) {
-  if (n === 0) return { row: "1 / 6", column: "1" };
-  return { row: String(ROW_OF_NUMBER[n % 3]), column: String(numberColumn(n)) };
+/** Top to bottom beside the numbers. The dozens appear on both sides. */
+export const LEFT_SIDE = Object.freeze(["low", "even", "red", "dozen1", "dozen2", "dozen3"]);
+export const RIGHT_SIDE = Object.freeze(["high", "odd", "black", "dozen1", "dozen2", "dozen3"]);
+
+const rowOf = (n) => Math.floor((n - 1) / 3) + 1; // 1..12
+const colOf = (n) => ({ 1: 1, 2: 2, 0: 3 })[n % 3]; // 1..3, smallest number left
+const lineCol = (j) => 2 * j + 1; // number column j with lines on: 3, 5, 7
+const EDGE = 2; // the street edge column with lines on
+const H0 = 2; // the line between 0 and 1-2-3 with lines on
+
+export function numberGridPlacement(n, { lineBets = false } = {}) {
+  if (n === 0) return { row: "1", column: lineBets ? "3 / 8" : "2 / 5" };
+  return lineBets
+    ? { row: String(2 * rowOf(n) + 1), column: String(lineCol(colOf(n))) }
+    : { row: String(rowOf(n) + 1), column: String(colOf(n) + 1) };
 }
 
-export function columnButtonPlacement(k) {
-  return { row: String(ROW_OF_NUMBER[k % 3]), column: "26" };
+/** Every position of an outside bet: one for chances and columns, two for dozens (left first). */
+export function sideGridPlacements(fieldId, { lineBets = false } = {}) {
+  if (fieldId.startsWith("col")) {
+    const j = Number(fieldId.slice(3));
+    return [lineBets
+      ? { row: "26", column: String(lineCol(j)) }
+      : { row: "14", column: String(j + 1) }];
+  }
+  const band = (i) => (lineBets ? `${3 + 4 * i} / ${6 + 4 * i}` : `${2 + 2 * i} / ${4 + 2 * i}`);
+  const out = [];
+  const left = LEFT_SIDE.indexOf(fieldId);
+  const right = RIGHT_SIDE.indexOf(fieldId);
+  if (left >= 0) out.push({ row: band(left), column: "1" });
+  if (right >= 0) out.push({ row: band(right), column: lineBets ? "8" : "5" });
+  return out;
 }
 
-/** Where a line bet sits: the edge or corner between its numbers. */
+/** Where a line bet sits on the felt: the edge or corner between its numbers. */
 export function lineGridPlacement(field) {
-  const [a, b] = field.numbers;
-  const low = field.numbers.find((n) => n > 0);
-  const between = (n) => (n % 3 === 2 ? H32 : H21); // line under n's row
+  const a = Math.min(...field.numbers.filter((n) => n > 0));
+  const k = rowOf(a);
+  const c = lineCol(colOf(a));
+  const hasZero = field.numbers.includes(0);
   let row;
   let column;
   switch (field.type) {
     case "split":
-      if (a === 0) [row, column] = [ROW_OF_NUMBER[b % 3], V0];
-      else if (b === a + 1) [row, column] = [between(a), numberColumn(a)];
-      else [row, column] = [ROW_OF_NUMBER[a % 3], lineColumnAfter(a)];
+      if (hasZero) [row, column] = [H0, c];
+      else if (field.numbers[1] - field.numbers[0] === 1) [row, column] = [2 * k + 1, c + 1];
+      else [row, column] = [2 * k + 2, c];
       break;
-    case "corner": [row, column] = [between(a), lineColumnAfter(a)]; break;
-    case "trio": [row, column] = [field.numbers.includes(1) ? H21 : H32, V0]; break;
-    case "street": [row, column] = [EDGE, numberColumn(low)]; break;
-    case "sixline": [row, column] = [EDGE, lineColumnAfter(low)]; break;
-    case "basket": [row, column] = [EDGE, V0]; break;
+    case "corner": [row, column] = [2 * k + 2, c + 1]; break;
+    case "trio": [row, column] = [H0, field.numbers.includes(1) ? 4 : 6]; break;
+    case "street": [row, column] = [2 * k + 1, EDGE]; break;
+    case "sixline": [row, column] = [2 * k + 2, EDGE]; break;
+    case "basket": [row, column] = [H0, EDGE]; break;
     default: throw new Error(`unknown line type ${field.type}`);
   }
   return { row: String(row), column: String(column) };
@@ -109,28 +125,34 @@ function pick(field) {
   return el;
 }
 
-export function buildTableau({ tableau, dozens, outside, lineList }, { lineBets = false } = {}) {
+/**
+ * Builds the board and returns Map<fieldId, HTMLElement[]>. A field can have
+ * more than one element - a dozen sits on both sides of the felt, a line has
+ * its zone AND its list entry - and render applies one state to all of them,
+ * so two positions of one bet can never disagree.
+ */
+export function buildTableau({ tableau, lineList }, { lineBets = false } = {}) {
   tableau.replaceChildren();
-  dozens.replaceChildren();
-  outside.replaceChildren();
+  tableau.classList.add("french");
+  const opts = { lineBets };
 
-  // Zero spans all three rows on the left, as on a real table.
-  tableau.append(cell(fieldById("n0"), "zero"));
+  for (let n = 0; n <= 36; n++) {
+    const el = cell(fieldById(`n${n}`), n === 0 ? "zero" : "");
+    placeAt(el, numberGridPlacement(n, opts));
+    tableau.append(el);
+  }
 
-  // Rows run 3,6..36 / 2,5..35 / 1,4..34 - i.e. column 3, then 2, then 1.
-  for (const offset of [3, 2, 1]) {
-    for (let n = offset; n <= 36; n += 3) tableau.append(cell(fieldById(`n${n}`)));
-    tableau.append(cell(fieldById(`col${offset}`), "colbtn outside"));
+  for (const field of BET_FIELDS.filter((f) => f.kind === "outside")) {
+    const extra = field.id.startsWith("col") ? "outside colbtn" : "outside";
+    for (const at of sideGridPlacements(field.id, opts)) {
+      const el = cell(field, extra);
+      placeAt(el, at);
+      tableau.append(el);
+    }
   }
 
   if (lineBets) {
     tableau.classList.add("lines");
-    for (const el of [...tableau.children]) {
-      const field = fieldById(el.dataset.fieldId);
-      placeAt(el, field.kind === "number"
-        ? numberGridPlacement(field.number)
-        : columnButtonPlacement(Number(field.id.slice(3))));
-    }
     for (const field of BET_FIELDS.filter((f) => f.kind === "line")) {
       const el = zone(field);
       placeAt(el, lineGridPlacement(field));
@@ -150,15 +172,8 @@ export function buildTableau({ tableau, dozens, outside, lineList }, { lineBets 
     for (const field of BET_FIELDS.filter((f) => f.kind === "line")) lineList.append(pick(field));
   }
 
-  for (const id of ["dozen1", "dozen2", "dozen3"]) dozens.append(cell(fieldById(id), "outside"));
-  dozens.classList.add("dozens");
-
-  for (const id of ["low", "even", "red", "black", "odd", "high"]) {
-    outside.append(cell(fieldById(id), "outside"));
-  }
-
   const byId = new Map();
-  const containers = [tableau, dozens, outside, ...(lineBets && lineList ? [lineList] : [])];
+  const containers = [tableau, ...(lineBets && lineList ? [lineList] : [])];
   for (const el of containers.flatMap((c) => [...c.children])) {
     const id = el.dataset.fieldId;
     if (!id) continue; // the list hint

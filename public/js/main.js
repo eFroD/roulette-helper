@@ -36,7 +36,7 @@ const els = {
   history: $("history"),
   lineList: $("line-list"),
   cells: buildTableau(
-    { tableau: $("tableau"), dozens: $("dozens"), outside: $("outside"), lineList: $("line-list") },
+    { tableau: $("tableau"), lineList: $("line-list") },
     { lineBets: config.lineBets },
   ),
 };

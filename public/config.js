@@ -12,5 +12,5 @@ window.ROULETTE_CONFIG = {
   baseStakeNumber: 5, // ein Tap auf eine Innenwette: Zahl (0-36) oder Linie (Split, Street, Corner, ...)
   currencySymbol: "€", // wird hinter jeden Betrag gesetzt
   historyLength: 10, // Laenge der Zahlen-Historie; 0 blendet sie aus
-  lineBets: true, // Wetten auf den Linien anbieten; false = Tableau wie vorher
+  lineBets: true, // Wetten auf den Linien anbieten; false = Tableau ohne Linienwetten
 };

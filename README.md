@@ -2,6 +2,8 @@
 
 A small web app that does the arithmetic for an amateur dealer at a private roulette party (play money, real chips). The dealer enters the winning number **after** the throw; the app highlights exactly the fields that win, locks every losing field so a lost bet cannot be entered at all, and shows stake, win, total and **win per chip** for each occupied field plus the round total. Line bets (split, street, corner, sixline, and the trios and basket at zero) are included: tap them on the line between the numbers, or pick them from a list of only the winning lines.
 
+The board is drawn as the **French felt** on the host's table, upright as the dealer sees it: 0 on top, twelve rows of three below, Manque / Pair / Rouge on the left, Passe / Impair / Noir on the right, P12 / M12 / D12 on both sides (each dozen is one bet, whichever side is tapped), the columns at the bottom. The result list names each outside bet in French with its German meaning, e.g. "Manque (1–18)".
+
 No backend, no database, no accounts, no persistence. Nothing leaves the browser.
 
 ## Run it
@@ -26,7 +28,7 @@ window.ROULETTE_CONFIG = {
   baseStakeNumber: 5,   // one tap on an inside bet: a single number or a line
   currencySymbol: "€",
   historyLength: 10,    // 0 hides the history strip
-  lineBets: true,       // false = the board without line bets, exactly as before
+  lineBets: true,       // false = the French felt without line bets
 };
 ```
 
@@ -55,9 +57,9 @@ Nothing under `public/js/domain/` may reference `document`, `window`, `navigator
 
 That rule is enforced by `tests/domain-purity.test.js`, which strips comments before scanning, so it runs as part of the normal suite rather than relying on discipline.
 
-## On the tablet
+## On the tablet and the laptop
 
-- **Fullscreen**: use the ⛶ button in the app. Browsers require a tap for this, so it cannot happen automatically.
+- **Fullscreen**: use the ⛶ button in the app. Browsers require a tap for this, so it cannot happen automatically. The upright board is limited by screen height: on a 1366×768 laptop with line bets on it only fits in fullscreen (rows of 37 px); in a normal browser window the page scrolls a little.
 - **Home screen**: on iPad, Share → "Add to Home Screen" gives a chrome-less launch. Chrome's install prompt needs HTTPS and will not appear over plain LAN HTTP — see below.
 - **Screen sleep**: the app keeps the screen awake from the first tap onward. Please also raise the tablet's own screen-timeout setting as a backstop.
 
@@ -82,4 +84,4 @@ tests/                  # node --test
 
 ## Rules of the house
 
-European roulette, 37 fields. Single numbers pay 35:1, splits 17:1, streets and trios (0-1-2, 0-2-3) 11:1, corners and the basket (0-1-2-3) 8:1, sixlines 5:1, red/black/even/odd/halves 1:1, dozens and columns 2:1. Line bets use the single-number base stake. On zero **all** outside bets lose in full (no La Partage, no En Prison), while the six lines touching zero win normally.
+Single-zero roulette on a French felt, 37 fields. The felt is French, the rules are not: only the layout follows the French table. Single numbers pay 35:1, splits 17:1, streets and trios (0-1-2, 0-2-3) 11:1, corners and the basket (0-1-2-3) 8:1, sixlines 5:1, red/black/even/odd/halves 1:1, dozens and columns 2:1. Line bets use the single-number base stake. On zero **all** outside bets lose in full (no La Partage, no En Prison), while the six lines touching zero win normally.

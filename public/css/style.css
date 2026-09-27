@@ -21,12 +21,16 @@
   --fs-total: 2.75rem;
   --tap-min: 56px;
   --tap-action: 64px;
+  /* The French felt stands upright: 14 rows must fit the screen height, so a
+     row may drop to 36px - the cells get three to four times wider in return,
+     and their area never falls below the old board's (spec 003 FR-014). */
+  --row-min: 36px;
   /* The thin tracks that hold the line-bet zones (002) - the trial knobs.
-     Asymmetric on purpose: the number cells are tall and narrow, so every
-     pixel of a vertical track is taken from scarce cell WIDTH, while the
-     horizontal tracks draw on plentiful height. */
-  --line-track-v: 14px;
-  --line-track-h: 24px;
+     Asymmetric on purpose, and flipped by the upright felt (003 R-203):
+     height is now the scarce axis, so the horizontal tracks between the
+     rows stay thin while the vertical ones draw on plentiful width. */
+  --line-track-v: 24px;
+  --line-track-h: 12px;
 
   color-scheme: dark;
 }
@@ -106,20 +110,23 @@ button { font: inherit; color: inherit; border: none; background: none; cursor: 
 }
 .board { display: flex; flex-direction: column; gap: 0.6rem; min-height: 0; }
 
-/* ---------- tableau ---------- */
+/* ---------- tableau: the French felt (specs/003 R-201, R-202) ---------- */
+/* Every item carries its own grid-row / grid-column (tableau.js), so the
+   templates below only size the tracks. */
 .tableau {
   display: grid;
-  grid-template-columns: 1.15fr repeat(12, 1fr) 0.95fr;
-  grid-template-rows: repeat(3, minmax(var(--tap-min), 1fr));
   gap: 4px;
   flex: 1; min-height: 0;
 }
-.betrow { display: grid; gap: 4px; grid-auto-flow: column; grid-auto-columns: 1fr; }
-.betrow.dozens { min-height: var(--tap-min); }
+.tableau.french {
+  grid-template-columns:
+    minmax(5.5rem, 0.8fr) repeat(3, minmax(0, 1fr)) minmax(5.5rem, 0.8fr);
+  grid-template-rows: repeat(14, minmax(var(--row-min), 1fr));
+}
 
 .cell {
   position: relative;
-  min-height: var(--tap-min);
+  min-height: var(--row-min);
   border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   display: grid; place-items: center;
@@ -127,9 +134,19 @@ button { font: inherit; color: inherit; border: none; background: none; cursor: 
   padding: 0.2rem;
   transition: transform 0.06s ease, filter 0.1s ease;
 }
-.cell.outside { font-size: 1rem; min-height: 72px; background: var(--felt-raised); }
-.cell.zero { grid-row: 1 / 4; grid-column: 1; }
+.cell.outside { font-size: 1.05rem; min-height: var(--row-min); background: var(--felt-raised); }
 .cell.colbtn { font-size: 0.9rem; background: var(--felt-raised); }
+
+/* Rouge and Noir carry the diamond many French felts print instead of the
+   word. The outside cell itself stays neutral: only numbers get data-colour. */
+.cell[data-field-id="red"] .cell-label::after,
+.cell[data-field-id="black"] .cell-label::after {
+  content: " \25C6"; font-size: 1.3em; line-height: 0; vertical-align: -0.08em;
+}
+.cell[data-field-id="red"] .cell-label::after { color: #e0303a; }
+.cell[data-field-id="black"] .cell-label::after {
+  color: #000; text-shadow: 0 0 1px var(--ink), 0 0 2px rgba(245, 243, 232, 0.6);
+}
 
 .cell[data-colour="red"] { background: var(--red); }
 .cell[data-colour="black"] { background: var(--black); }
@@ -159,21 +176,39 @@ button { font: inherit; color: inherit; border: none; background: none; cursor: 
 }
 .cell:active:not([data-state="loser"]) { transform: scale(0.96); }
 
-/* ---------- line bets: interleaved grid (specs/002 R-103) ---------- */
-.tableau.lines {
-  grid-template-columns: 1.15fr var(--line-track-v) repeat(11, 1fr var(--line-track-v)) 1fr 0.95fr;
+/* ---------- line bets: interleaved grid (specs/002 R-103, upright 003 R-202) ---------- */
+/* 8 columns: L | E (streets, sixlines, basket) | c1 | v | c2 | v | c3 | R
+   26 rows:   zero | h0 | 11 x (number row, line) | row 34-36 | columns */
+.tableau.french.lines {
+  grid-template-columns:
+    minmax(5.5rem, 0.8fr) var(--line-track-v)
+    minmax(0, 1fr) var(--line-track-v) minmax(0, 1fr) var(--line-track-v) minmax(0, 1fr)
+    minmax(5.5rem, 0.8fr);
   grid-template-rows:
-    minmax(var(--tap-min), 1fr) var(--line-track-h)
-    minmax(var(--tap-min), 1fr) var(--line-track-h)
-    minmax(var(--tap-min), 1fr) var(--line-track-h);
+    minmax(var(--row-min), 1fr) var(--line-track-h)
+    repeat(11, minmax(var(--row-min), 1fr) var(--line-track-h))
+    minmax(var(--row-min), 1fr) minmax(var(--row-min), 1fr);
   gap: 0;
 }
 /* The line tracks replace the old 4px gaps; a 1px inset keeps cells apart. */
 .tableau.lines .cell { margin: 1px; }
-.tableau.lines .colbtn { margin-left: 6px; }
+/* The outside columns have no line track beside them: keep them off the
+   street edge and the numbers. */
+.tableau.lines .cell.outside:not(.colbtn) { margin: 1px 4px; }
 /* With lines on, the board needs the width more than the results panel,
    which switches to compact rows in busy rounds anyway. */
-.stage.lines { grid-template-columns: minmax(0, 1fr) minmax(280px, 20rem); }
+.stage.lines {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 20rem);
+  /* 14 rows of >= 36px plus 12 line tracks just fit 1366x768 in fullscreen;
+     the vertical padding is the last slack (003 R-203). */
+  padding-block: 0.5rem;
+}
+/* The upright board has width to spare and no height: the selection list
+   moves beside it instead of below (003 R-205). */
+.stage.lines .board {
+  display: grid; grid-template-columns: minmax(0, 1fr) 13rem;
+  grid-template-rows: minmax(0, 1fr); gap: 0.6rem;
+}
 
 .zone {
   position: relative;
@@ -189,10 +224,12 @@ button { font: inherit; color: inherit; border: none; background: none; cursor: 
   transition: transform 0.08s ease, background 0.1s ease;
 }
 /* Fixed size, not a percentage: the tracks are long and thin, and a
-   percentage of each side would stretch the marker into an oval. */
+   percentage of each side would stretch the marker into an oval. Sized by
+   the thinner of the two tracks so it never spills across a number. */
 .zone[data-state="winner"]::before,
 .zone[data-state="occupied"]::before {
-  width: calc(var(--line-track-v) * 0.9); height: calc(var(--line-track-v) * 0.9);
+  width: calc(min(var(--line-track-v), var(--line-track-h)) * 0.9);
+  height: calc(min(var(--line-track-v), var(--line-track-h)) * 0.9);
   background: var(--gold-bright);
   box-shadow: 0 0 0 2px #201a00, 0 0 10px 2px rgba(240, 207, 92, 0.7);
 }
@@ -219,16 +256,16 @@ button { font: inherit; color: inherit; border: none; background: none; cursor: 
 /* ---------- line selection list (specs/002 R-104) ---------- */
 .line-list {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: var(--tap-min);
+  align-content: start;
   gap: 4px;
-  /* Reserved for two rows even while empty, so entering a number does not
-     make the board jump under the dealer's finger. */
-  min-height: calc(2 * var(--tap-min) + 4px);
-  flex: none;
+  /* Beside the board it has the full height, so it never pushes the board
+     around; at most 11 lines win for any number (003 R-205). */
+  min-height: 0; overflow-y: auto;
 }
 .line-list-hint {
-  grid-column: 1 / -1; align-self: center; margin: 0;
+  grid-column: 1 / -1; grid-row: span 2; align-self: center; margin: 0;
   color: var(--ink-dim); font-size: 1.05rem; text-align: center;
   border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 8px;
   height: 100%; display: grid; place-items: center;
@@ -349,18 +386,20 @@ button { font: inherit; color: inherit; border: none; background: none; cursor: 
 .nosleep-video { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 /* ---------- line tracks on touch devices ---------- */
-/* Separate knobs for the tablet trial. Wider vertical tracks cost number-cell
-   width that a tablet does not have (measured: 42px cells at 1180x820 with
-   14px tracks, 48px before line bets), so the width stays; on touch the
-   zones mark position and the selection list is the reliable route. */
+/* Separate knobs for the tablet. On the upright felt (003) width is
+   plentiful, so the vertical tracks can be wide enough for a fingertip;
+   the horizontal ones cost scarce row height and grow only a little. On
+   touch the list remains the reliable route for corners and sixlines. */
 @media (pointer: coarse) and (max-width: 1366px) {
-  :root { --line-track-v: 14px; --line-track-h: 28px; }
+  :root { --line-track-v: 32px; --line-track-h: 14px; }
 }
 
 /* ---------- portrait / small ---------- */
 @media (max-aspect-ratio: 1/1) {
   .stage,
   .stage.lines { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .stage.lines .board { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .line-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .panel { max-height: 45vh; }
   .cell { font-size: 1rem; }
 }

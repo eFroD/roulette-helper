@@ -22,16 +22,19 @@ export function colourOf(n) {
 // Every outside bet below tests `n > 0` (or an explicit range starting at 1).
 // That single condition is the whole of the zero rule: on 0 all outside bets
 // lose in full, and only the straight bet on 0 wins. No La Partage, no En Prison.
+//
+// `label` names the bet in the result list; `feltLabel` is what the French
+// felt prints (spec 003 FR-006/FR-007). Fields without one show `label`.
 const OUTSIDE_DEFINITIONS = [
-  { id: "low", label: "1–18", ratio: 1, wins: (n) => n >= 1 && n <= 18 },
-  { id: "even", label: "Gerade", ratio: 1, wins: (n) => n > 0 && n % 2 === 0 },
-  { id: "red", label: "Rot", ratio: 1, wins: (n) => n > 0 && RED_NUMBERS.has(n) },
-  { id: "black", label: "Schwarz", ratio: 1, wins: (n) => n > 0 && !RED_NUMBERS.has(n) },
-  { id: "odd", label: "Ungerade", ratio: 1, wins: (n) => n > 0 && n % 2 === 1 },
-  { id: "high", label: "19–36", ratio: 1, wins: (n) => n >= 19 && n <= 36 },
-  { id: "dozen1", label: "1. Dutzend", ratio: 2, wins: (n) => n >= 1 && n <= 12 },
-  { id: "dozen2", label: "2. Dutzend", ratio: 2, wins: (n) => n >= 13 && n <= 24 },
-  { id: "dozen3", label: "3. Dutzend", ratio: 2, wins: (n) => n >= 25 && n <= 36 },
+  { id: "low", label: "Manque (1–18)", feltLabel: "Manque", ratio: 1, wins: (n) => n >= 1 && n <= 18 },
+  { id: "even", label: "Pair (Gerade)", feltLabel: "Pair", ratio: 1, wins: (n) => n > 0 && n % 2 === 0 },
+  { id: "red", label: "Rouge (Rot)", feltLabel: "Rouge", ratio: 1, wins: (n) => n > 0 && RED_NUMBERS.has(n) },
+  { id: "black", label: "Noir (Schwarz)", feltLabel: "Noir", ratio: 1, wins: (n) => n > 0 && !RED_NUMBERS.has(n) },
+  { id: "odd", label: "Impair (Ungerade)", feltLabel: "Impair", ratio: 1, wins: (n) => n > 0 && n % 2 === 1 },
+  { id: "high", label: "Passe (19–36)", feltLabel: "Passe", ratio: 1, wins: (n) => n >= 19 && n <= 36 },
+  { id: "dozen1", label: "P12 (1. Dutzend)", feltLabel: "P12", ratio: 2, wins: (n) => n >= 1 && n <= 12 },
+  { id: "dozen2", label: "M12 (2. Dutzend)", feltLabel: "M12", ratio: 2, wins: (n) => n >= 13 && n <= 24 },
+  { id: "dozen3", label: "D12 (3. Dutzend)", feltLabel: "D12", ratio: 2, wins: (n) => n >= 25 && n <= 36 },
   { id: "col1", label: "1. Kolonne", ratio: 2, wins: (n) => n > 0 && n % 3 === 1 },
   { id: "col2", label: "2. Kolonne", ratio: 2, wins: (n) => n > 0 && n % 3 === 2 },
   { id: "col3", label: "3. Kolonne", ratio: 2, wins: (n) => n > 0 && n % 3 === 0 },

@@ -60,13 +60,14 @@ globalThis.document = {
 
 const { buildTableau } = await import("../public/js/ui/tableau.js");
 const { render } = await import("../public/js/ui/render.js");
-const { createRound, setWinningNumber, addStake, undo } = await import("../public/js/domain/round.js");
+const { createRound, setWinningNumber, addStake, undo, clearField } = await import("../public/js/domain/round.js");
+const { fieldById } = await import("../public/js/domain/wheel.js");
 
 const CONFIG = { baseStakeOutside: 10, baseStakeNumber: 5, currencySymbol: "€", historyLength: 10 };
 
 function mount(options) {
   const el = () => new El("div");
-  const containers = { tableau: el(), dozens: el(), outside: el(), lineList: el() };
+  const containers = { tableau: el(), lineList: el() };
   const cells = buildTableau(containers, options);
   return {
     status: el(), results: el(), total: el(), subtotals: el(),
@@ -78,6 +79,26 @@ function mount(options) {
 // The map holds every element of a field; before line bets that is exactly one.
 const one = (els, id) => els.cells.get(id)[0];
 const firsts = (els) => [...els.cells].map(([id, list]) => [id, list[0]]);
+
+// Expands an element's inline grid placement ("2 / 4" is end-exclusive, "5" is
+// one track) into the "row|col" cells it covers.
+function cellsOf(el) {
+  const span = (v) => {
+    const [a, b] = String(v).split("/").map((x) => Number(x.trim()));
+    return Array.from({ length: (b ?? a + 1) - a }, (_, i) => a + i);
+  };
+  return span(el.style.gridRow).flatMap((r) => span(el.style.gridColumn).map((c) => `${r}|${c}`));
+}
+
+function assertNoSharedCell(elements) {
+  const taken = new Map();
+  for (const el of elements) {
+    for (const cell of cellsOf(el)) {
+      assert.equal(taken.has(cell), false, `${el.dataset.fieldId} and ${taken.get(cell)} share ${cell}`);
+      taken.set(cell, el.dataset.fieldId);
+    }
+  }
+}
 
 test("the tableau builds all 49 fields", () => {
   const els = mount();
@@ -219,15 +240,51 @@ test("with lineBets on, every line has a placed zone on the tableau", () => {
   }
 });
 
-test("no two zones share a grid cell, and no zone sits on a number cell (FR-021)", () => {
+test("lines on: no two tableau elements share a grid cell", () => {
   const els = mount({ lineBets: true });
-  const zones = lineIdsOf(els).map((id) => place(zoneOf(els, id)));
-  assert.equal(new Set(zones).size, 108, "zones overlap each other");
-  const numberCells = new Set();
-  for (let n = 1; n <= 36; n++) numberCells.add(place(one(els, `n${n}`)));
-  for (const k of [1, 2, 3]) numberCells.add(place(one(els, `col${k}`)));
-  assert.equal(numberCells.size, 39, "number cells must be explicitly placed");
-  for (const z of zones) assert.equal(numberCells.has(z), false, `zone at ${z} overlaps a cell`);
+  assert.equal(els.cells.size, 157);
+  assert.equal([...els.cells.values()].flat().length, 268);
+  assert.equal(els.tableau.children.length, 160);
+  assertNoSharedCell(els.tableau.children);
+});
+
+test("lines on: zones sit between exactly their numbers (SC-003)", () => {
+  const els = mount({ lineBets: true });
+  const numberAt = new Map();
+  for (let n = 0; n <= 36; n++) for (const c of cellsOf(one(els, `n${n}`))) numberAt.set(c, n);
+  const at = (r, c) => numberAt.get(`${r}|${c}`);
+  const sorted = (xs) => [...new Set(xs.filter((x) => x !== undefined))].sort((a, b) => a - b);
+
+  for (const id of lineIdsOf(els)) {
+    const field = fieldById(id);
+    const [r, c] = [Number(zoneOf(els, id).style.gridRow), Number(zoneOf(els, id).style.gridColumn)];
+    let found;
+    switch (field.type) {
+      case "split": case "corner": case "trio":
+        found = [-1, 0, 1].flatMap((dr) => [-1, 0, 1].map((dc) => at(r + dr, c + dc)));
+        break;
+      case "street":
+        assert.equal(c, 2, `${id} on the street edge`);
+        found = [3, 5, 7].map((col) => at(r, col));
+        break;
+      case "sixline":
+        assert.equal(c, 2, `${id} on the street edge`);
+        found = [r - 1, r + 1].flatMap((row) => [3, 5, 7].map((col) => at(row, col)));
+        break;
+      case "basket":
+        assert.deepEqual([r, c], [2, 2]);
+        continue;
+    }
+    assert.deepEqual(sorted(found), [...field.numbers].sort((a, b) => a - b), `${id} at ${r}|${c}`);
+  }
+
+  // The worked example of data-model section 4.
+  assert.equal(place(one(els, "n17")), "13|5");
+  for (const [id, cell] of [
+    ["split-16-17", "13|4"], ["split-17-18", "13|6"], ["split-14-17", "12|5"], ["split-17-20", "14|5"],
+    ["street-16-17-18", "13|2"], ["sixline-13-14-15-16-17-18", "12|2"], ["basket-0-1-2-3", "2|2"],
+    ["trio-0-1-2", "2|4"], ["split-0-3", "2|7"],
+  ]) assert.equal(place(zoneOf(els, id)), cell, id);
 });
 
 test("zones are neutral before a number, then 11 winners and 97 disabled losers for 17", () => {
@@ -319,15 +376,49 @@ test("while picking a new number the list hides again and the hint returns", () 
 
 // ------------------------------------------------------- switched off (US4)
 
-test("lineBets false builds exactly the pre-line board (FR-028)", () => {
+test("lineBets false builds the French board: 49 ids, 52 elements", () => {
   const els = mount({ lineBets: false });
   assert.equal(els.cells.size, 49);
-  for (const [id, list] of els.cells) assert.equal(list.length, 1, `${id} has one element`);
+  for (const [id, list] of els.cells) {
+    assert.equal(list.length, id.startsWith("dozen") ? 2 : 1, `${id} element count`);
+  }
   const all = [...els.cells.values()].flat();
   assert.equal(all.some((el) => el.classList.contains("zone") || el.classList.contains("pick")), false);
+  assert.equal(els.tableau.classList.contains("french"), true);
   assert.equal(els.tableau.classList.contains("lines"), false);
-  assert.equal(all.some((el) => el.style.gridRow !== undefined), false, "no inline placement");
+  for (const el of all) {
+    assert.ok(el.style.gridRow && el.style.gridColumn, `${el.dataset.fieldId} must be placed`);
+  }
   assert.equal(els.lineList.children.length, 0);
+});
+
+test("lines off: no two tableau elements share a grid cell", () => {
+  const els = mount({ lineBets: false });
+  assert.equal(els.tableau.children.length, 52);
+  assertNoSharedCell(els.tableau.children);
+});
+
+test("lines off: placements follow the French felt (FR-001, FR-002, FR-005)", () => {
+  const els = mount({ lineBets: false });
+  const at = (el) => `${el.style.gridRow}|${el.style.gridColumn}`;
+  const all = (id) => els.cells.get(id).map(at);
+  assert.equal(at(one(els, "n0")), "1|2 / 5");
+  assert.equal(at(one(els, "n1")), "2|2");
+  assert.equal(at(one(els, "n3")), "2|4");
+  assert.equal(at(one(els, "n34")), "13|2");
+  assert.equal(at(one(els, "n36")), "13|4");
+  assert.deepEqual(all("low"), ["2 / 4|1"]);
+  assert.deepEqual(all("high"), ["2 / 4|5"]);
+  assert.deepEqual(all("red"), ["6 / 8|1"]);
+  assert.deepEqual(all("black"), ["6 / 8|5"]);
+  assert.deepEqual(all("dozen3"), ["12 / 14|1", "12 / 14|5"]);
+  assert.deepEqual(all("col1"), ["14|2"]);
+  assert.deepEqual(all("col3"), ["14|4"]);
+
+  const text = (id) => one(els, id).querySelector(".cell-label").textContent;
+  assert.equal(text("low"), "Manque");
+  assert.equal(text("dozen1"), "P12");
+  assert.equal(one(els, "n0").classList.contains("zero"), true);
 });
 
 test("lineBets false: 17 gives the six 001 winners and 43 losers, 0 only field 0", () => {
@@ -342,6 +433,61 @@ test("lineBets false: 17 gives the six 001 winners and 43 losers, 0 only field 0
 });
 
 // ------------------------------------------------------ compact results (US5)
+
+// ------------------------------------------------ French felt (003 US2, US3)
+
+test("both dozen positions are one bet (FR-004, US2 AC1-2)", () => {
+  const els = mount({ lineBets: false });
+  let round = setWinningNumber(createRound(), 5);
+  render(round, CONFIG, els);
+  for (const el of els.cells.get("dozen1")) assert.equal(el.dataset.state, "winner");
+  for (const el of [...els.cells.get("dozen2"), ...els.cells.get("dozen3")]) {
+    assert.equal(el.dataset.state, "loser");
+    assert.equal(el.disabled, true);
+  }
+  round = addStake(addStake(round, "dozen1"), "dozen1");
+  render(round, CONFIG, els);
+  for (const el of els.cells.get("dozen1")) {
+    assert.equal(el.dataset.state, "occupied");
+    assert.equal(el.querySelector(".taps").textContent, "2x");
+  }
+  const cards = els.results.children.filter((c) => c.classList.contains("result"));
+  assert.equal(cards.length, 1);
+  assert.match(cards[0].textContent, /P12 \(1\. Dutzend\)/);
+});
+
+test("on zero every dozen and column position is locked (US2 AC3)", () => {
+  const els = mount({ lineBets: false });
+  render(setWinningNumber(createRound(), 0), CONFIG, els);
+  const positions = ["dozen1", "dozen2", "dozen3", "col1", "col2", "col3"].flatMap((id) => els.cells.get(id));
+  assert.equal(positions.length, 9);
+  for (const el of positions) {
+    assert.equal(el.dataset.state, "loser");
+    assert.equal(el.disabled, true);
+  }
+});
+
+test("clearing a dozen empties both positions (US2 AC4)", () => {
+  const els = mount({ lineBets: false });
+  const round = addStake(setWinningNumber(createRound(), 5), "dozen1");
+  render(clearField(round, "dozen1"), CONFIG, els);
+  for (const el of els.cells.get("dozen1")) {
+    assert.equal(el.dataset.state, "winner");
+    assert.equal(el.querySelector(".taps").hidden, true);
+  }
+});
+
+test("result cards show French and German, the rest stays German (US3 AC1, FR-008)", () => {
+  const els = mount({ lineBets: false });
+  let round = setWinningNumber(createRound(), 14);
+  for (const id of ["low", "even", "red", "dozen2"]) round = addStake(round, id);
+  render(round, CONFIG, els);
+  const text = els.results.textContent;
+  for (const label of ["Manque (1–18)", "Pair (Gerade)", "Rouge (Rot)", "M12 (2. Dutzend)"]) {
+    assert.ok(text.includes(label), `result list shows ${label}`);
+  }
+  assert.match(els.status.textContent, /Gewinnzahl/);
+});
 
 test("results turn compact above five occupied fields, and back again on undo", () => {
   const els = mount({ lineBets: true });
