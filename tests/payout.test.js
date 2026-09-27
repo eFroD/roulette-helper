@@ -9,6 +9,9 @@ test("unit is chosen by field kind", () => {
   assert.equal(unitFor(fieldById("n17"), CONFIG), 5);
   assert.equal(unitFor(fieldById("red"), CONFIG), 10);
   assert.equal(unitFor(fieldById("dozen2"), CONFIG), 10);
+  // Lines are inside bets: they take the number stake, never the outside one.
+  assert.equal(unitFor(fieldById("split-16-17"), CONFIG), 5);
+  assert.equal(unitFor(fieldById("sixline-13-14-15-16-17-18"), CONFIG), 5);
 });
 
 test("the four formulas hold across all three ratios", () => {

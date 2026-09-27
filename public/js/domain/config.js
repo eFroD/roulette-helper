@@ -6,17 +6,21 @@ export const DEFAULT_CONFIG = Object.freeze({
   baseStakeNumber: 5,
   currencySymbol: "€",
   historyLength: 10,
+  lineBets: true,
 });
 
 const isPositiveAmount = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
 const isNonEmptyString = (v) => typeof v === "string" && v.trim().length > 0;
 const isCount = (v) => Number.isInteger(v) && v >= 0;
+// Strictly boolean: the string "false" is a typo to warn about, not a falsy value.
+const isBoolean = (v) => v === true || v === false;
 
 const RULES = [
   { key: "baseStakeOutside", valid: isPositiveAmount, expected: "eine Zahl groesser als 0" },
   { key: "baseStakeNumber", valid: isPositiveAmount, expected: "eine Zahl groesser als 0" },
   { key: "currencySymbol", valid: isNonEmptyString, expected: "ein nicht-leerer Text", normalise: (v) => v.trim() },
   { key: "historyLength", valid: isCount, expected: "eine ganze Zahl ab 0" },
+  { key: "lineBets", valid: isBoolean, expected: "true oder false" },
 ];
 
 /**

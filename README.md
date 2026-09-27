@@ -1,6 +1,6 @@
 # roulette-helper
 
-A small web app that does the arithmetic for an amateur dealer at a private roulette party (play money, real chips). The dealer enters the winning number **after** the throw; the app highlights exactly the fields that win, locks every losing field so a lost bet cannot be entered at all, and shows stake, win, total and **win per chip** for each occupied field plus the round total.
+A small web app that does the arithmetic for an amateur dealer at a private roulette party (play money, real chips). The dealer enters the winning number **after** the throw; the app highlights exactly the fields that win, locks every losing field so a lost bet cannot be entered at all, and shows stake, win, total and **win per chip** for each occupied field plus the round total. Line bets (split, street, corner, sixline, and the trios and basket at zero) are included: tap them on the line between the numbers, or pick them from a list of only the winning lines.
 
 No backend, no database, no accounts, no persistence. Nothing leaves the browser.
 
@@ -23,11 +23,14 @@ Edit [`public/config.js`](public/config.js) and reload the page. No rebuild, no 
 ```javascript
 window.ROULETTE_CONFIG = {
   baseStakeOutside: 10, // one tap on an outside bet
-  baseStakeNumber: 5,   // one tap on a single number
+  baseStakeNumber: 5,   // one tap on an inside bet: a single number or a line
   currencySymbol: "€",
   historyLength: 10,    // 0 hides the history strip
+  lineBets: true,       // false = the board without line bets, exactly as before
 };
 ```
+
+`lineBets` must be a real `true` or `false`. The string `"false"` is treated as a typo: the app warns and keeps line bets on.
 
 Every key is optional and each is validated independently. An invalid value falls back to its default and the app shows a warning naming the key — a typo can never leave a dealer facing a blank screen mid-party.
 
@@ -40,7 +43,8 @@ node --test
 Requires Node 20+ and **installs nothing** — the runner is built into Node. All arithmetic and state logic lives in `public/js/domain/`, which is free of any DOM reference, so it runs directly under Node with no browser, bundler, or shims.
 
 ```bash
-node --test tests/reference-scenarios.test.js   # just the seven spec acceptance cases
+node --test tests/reference-scenarios.test.js   # the spec acceptance cases (specs 001 and 002)
+node --test tests/lines.test.js                 # line-bet catalogue, geometry, exhaustive winner check
 ```
 
 Bare `node --test` auto-discovers the suite. Passing the directory (`node --test tests/`) works on Node 20 but not on Node 22+, which treats the argument as a module to execute.
@@ -78,4 +82,4 @@ tests/                  # node --test
 
 ## Rules of the house
 
-European roulette, 37 fields. Single numbers pay 35:1, red/black/even/odd/halves 1:1, dozens and columns 2:1. On zero **all** outside bets lose in full — no La Partage, no En Prison. Splits, streets and corners are not supported.
+European roulette, 37 fields. Single numbers pay 35:1, splits 17:1, streets and trios (0-1-2, 0-2-3) 11:1, corners and the basket (0-1-2-3) 8:1, sixlines 5:1, red/black/even/odd/halves 1:1, dozens and columns 2:1. Line bets use the single-number base stake. On zero **all** outside bets lose in full (no La Partage, no En Prison), while the six lines touching zero win normally.

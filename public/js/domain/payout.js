@@ -4,8 +4,10 @@
 // There is no division anywhere in this file. Every figure is a product of
 // integers, so with whole-number base stakes every displayed amount is exact.
 
+// Lines are inside bets played with the same chip as a single number, so
+// everything that is not an outside bet takes the number stake.
 export function unitFor(field, config) {
-  return field.kind === "number" ? config.baseStakeNumber : config.baseStakeOutside;
+  return field.kind === "outside" ? config.baseStakeOutside : config.baseStakeNumber;
 }
 
 /**

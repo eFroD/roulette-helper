@@ -34,12 +34,32 @@ const els = {
   btnChange: $("btn-change"),
   btnNext: $("btn-next"),
   history: $("history"),
-  cells: buildTableau({ tableau: $("tableau"), dozens: $("dozens"), outside: $("outside") }),
+  lineList: $("line-list"),
+  cells: buildTableau(
+    { tableau: $("tableau"), dozens: $("dozens"), outside: $("outside"), lineList: $("line-list") },
+    { lineBets: config.lineBets },
+  ),
 };
+els.lineList.hidden = !config.lineBets;
+document.querySelector(".stage").classList.toggle("lines", config.lineBets);
 
 initDialogs();
 initFullscreen($("btn-fullscreen"));
 showWarnings(warnings);
+
+// Every element of the tapped field pulses - the zone and its list entry - so
+// a dealer using the list also sees where that bet sits on the felt (FR-023).
+const FLASH_MS = 260;
+const flashTimers = new WeakMap();
+function flash(fieldId) {
+  for (const el of els.cells.get(fieldId) ?? []) {
+    clearTimeout(flashTimers.get(el));
+    delete el.dataset.flash;
+    void el.offsetWidth; // restart the animation on rapid repeat taps
+    el.dataset.flash = "";
+    flashTimers.set(el, setTimeout(() => delete el.dataset.flash, FLASH_MS));
+  }
+}
 
 function update(next) {
   round = next;
@@ -121,18 +141,22 @@ document.addEventListener("click", (event) => {
   if (pickingNumber) {
     // Replacing the number of a round already in progress: stakes are dropped
     // by the domain, the round never leaves "collecting".
-    if (field?.kind !== "number") return;
+    if (field?.kind !== "number") return; // FR-009: a line can never set the number
     pickingNumber = false;
     update(changeWinningNumber(round, field.number));
     return;
   }
 
   if (round.winningNumber === null) {
-    // Before a number exists, only a number field can set one.
+    // Before a number exists, only a number field can set one - a line zone or
+    // list entry tapped now does nothing (FR-009).
     if (field?.kind === "number") update(setWinningNumber(round, field.number));
     return;
   }
-  update(addStake(round, fieldId));
+  const next = addStake(round, fieldId);
+  const staked = next !== round; // a no-op tap (guard) gets no confirmation
+  update(next);
+  if (staked) flash(fieldId);
 });
 
 // ---------------------------------------------------------------- actions

@@ -4,9 +4,12 @@ import {
   BET_FIELDS, RED_NUMBERS, colourOf, fieldById, isWinner, winningFieldIds,
 } from "../public/js/domain/wheel.js";
 
-test("catalogue holds exactly 49 fields: 37 numbers + 12 outside bets", () => {
-  assert.equal(BET_FIELDS.length, 49);
+const nonLine = (ids) => ids.filter((id) => fieldById(id).kind !== "line");
+
+test("catalogue holds exactly 157 fields: 37 numbers + 108 lines + 12 outside bets", () => {
+  assert.equal(BET_FIELDS.length, 157);
   assert.equal(BET_FIELDS.filter((f) => f.kind === "number").length, 37);
+  assert.equal(BET_FIELDS.filter((f) => f.kind === "line").length, 108);
   assert.equal(BET_FIELDS.filter((f) => f.kind === "outside").length, 12);
 });
 
@@ -17,15 +20,15 @@ test("colours: 18 red, 18 black, zero green", () => {
   assert.deepEqual(counts, { red: 18, black: 18, green: 1 });
 });
 
-test("every number 1-36 has EXACTLY six winning fields", () => {
+test("every number 1-36 has EXACTLY six winning non-line fields", () => {
   for (let n = 1; n <= 36; n++) {
-    assert.equal(winningFieldIds(n).length, 6, `number ${n} should win exactly 6 fields`);
+    assert.equal(nonLine(winningFieldIds(n)).length, 6, `number ${n} should win exactly 6 non-line fields`);
   }
 });
 
 test("each of the six winners is one per category, with no duplicates", () => {
   for (let n = 1; n <= 36; n++) {
-    const ids = winningFieldIds(n);
+    const ids = nonLine(winningFieldIds(n));
     assert.equal(new Set(ids).size, 6);
     assert.ok(ids.includes(`n${n}`), `${n} must win its own straight bet`);
     assert.equal(ids.filter((id) => id.startsWith("dozen")).length, 1);
@@ -36,8 +39,10 @@ test("each of the six winners is one per category, with no duplicates", () => {
   }
 });
 
-test("zero wins only its own field - every outside bet loses in full", () => {
-  assert.deepEqual(winningFieldIds(0), ["n0"]);
+test("zero wins its own field and the six lines touching it - every outside bet loses in full", () => {
+  assert.deepEqual(winningFieldIds(0), [
+    "n0", "split-0-1", "split-0-2", "split-0-3", "trio-0-1-2", "trio-0-2-3", "basket-0-1-2-3",
+  ]);
   for (const f of BET_FIELDS.filter((f) => f.kind === "outside")) {
     assert.equal(f.wins(0), false, `${f.id} must lose on zero`);
   }

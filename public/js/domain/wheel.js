@@ -53,8 +53,81 @@ const OUTSIDE_FIELDS = OUTSIDE_DEFINITIONS.map((f) =>
   Object.freeze({ ...f, kind: "outside", colour: undefined, number: undefined }),
 );
 
-/** All 49 bet fields: 37 numbers then 12 outside bets. Order is render order. */
-export const BET_FIELDS = Object.freeze([...NUMBER_FIELDS, ...OUTSIDE_FIELDS]);
+// ---------------------------------------------------------------- line bets
+//
+// Generated from the street structure (street s = 3s+1 .. 3s+3), never listed
+// by hand: a hand-written list is exactly where a phantom split like 3/4 -
+// adjacent in a list, not on the felt - would slip in.
+
+/** Line types in selection-list order. */
+export const LINE_TYPES = Object.freeze(["split", "street", "trio", "corner", "basket", "sixline"]);
+
+const LINE_RATIOS = { split: 17, street: 11, trio: 11, corner: 8, basket: 8, sixline: 5 };
+
+function lineLabel(type, numbers) {
+  switch (type) {
+    case "split": return `Split ${numbers.join("/")}`;
+    case "corner": return `Corner ${numbers.join("/")}`;
+    case "street": return `Street ${numbers.join("-")}`;
+    case "trio": return `Trio ${numbers.join("-")}`;
+    case "basket": return `Basket ${numbers.join("-")}`;
+    case "sixline": return `Sixline ${numbers[0]}–${numbers[numbers.length - 1]}`;
+    default: return numbers.join("/");
+  }
+}
+
+function lineShapes() {
+  const shapes = [];
+  const add = (type, numbers) => shapes.push({ type, numbers });
+  for (let s = 0; s < 12; s++) {
+    const b = 3 * s + 1;
+    add("split", [b, b + 1]);
+    add("split", [b + 1, b + 2]);
+    add("street", [b, b + 1, b + 2]);
+  }
+  for (let n = 1; n <= 33; n++) add("split", [n, n + 3]);
+  for (const n of [1, 2, 3]) add("split", [0, n]);
+  for (let s = 0; s < 11; s++) {
+    const b = 3 * s + 1;
+    add("corner", [b, b + 1, b + 3, b + 4]);
+    add("corner", [b + 1, b + 2, b + 4, b + 5]);
+    add("sixline", [b, b + 1, b + 2, b + 3, b + 4, b + 5]);
+  }
+  add("trio", [0, 1, 2]);
+  add("trio", [0, 2, 3]);
+  add("basket", [0, 1, 2, 3]);
+  return shapes;
+}
+
+function compareNumbers(a, b) {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return a.length - b.length;
+}
+
+const LINE_FIELDS = lineShapes()
+  .sort((a, b) => LINE_TYPES.indexOf(a.type) - LINE_TYPES.indexOf(b.type) || compareNumbers(a.numbers, b.numbers))
+  .map(({ type, numbers }) => {
+    const frozen = Object.freeze([...numbers]);
+    return Object.freeze({
+      id: `${type}-${frozen.join("-")}`,
+      kind: "line",
+      type,
+      numbers: frozen,
+      label: lineLabel(type, frozen),
+      ratio: LINE_RATIOS[type],
+      colour: undefined,
+      number: undefined,
+      wins: (w) => frozen.includes(w),
+    });
+  });
+
+/**
+ * All 157 bet fields: 37 numbers, 108 lines, 12 outside bets. Inside bets come
+ * first so result cards list in the order a dealer pays.
+ */
+export const BET_FIELDS = Object.freeze([...NUMBER_FIELDS, ...LINE_FIELDS, ...OUTSIDE_FIELDS]);
 
 const BY_ID = new Map(BET_FIELDS.map((f) => [f.id, f]));
 
@@ -63,8 +136,10 @@ export function fieldById(id) {
 }
 
 /**
- * Exactly 6 ids for any n in 1-36 (the number, its colour, parity, half,
- * dozen and column). Exactly ["n0"] for 0. Empty for anything else.
+ * For n in 1-36: the 6 non-line winners (the number, its colour, parity, half,
+ * dozen and column) plus every line containing n - 11 to 17 ids in all. For 0:
+ * the field 0 and the six lines touching it; every outside bet loses. Empty
+ * for anything else. Catalogue order.
  */
 export function winningFieldIds(n) {
   if (!isValidNumber(n)) return [];

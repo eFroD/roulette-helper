@@ -14,7 +14,9 @@ test("valid values are taken as given", () => {
   const { config, warnings } = resolveConfig({
     baseStakeOutside: 20, baseStakeNumber: 2, currencySymbol: "$", historyLength: 5,
   });
-  assert.deepEqual(config, { baseStakeOutside: 20, baseStakeNumber: 2, currencySymbol: "$", historyLength: 5 });
+  assert.deepEqual(config, {
+    baseStakeOutside: 20, baseStakeNumber: 2, currencySymbol: "$", historyLength: 5, lineBets: true,
+  });
   assert.deepEqual(warnings, []);
 });
 
@@ -56,4 +58,27 @@ test("unknown keys are ignored, so the host can leave notes in the file", () => 
 
 test("the currency symbol is trimmed but otherwise verbatim", () => {
   assert.equal(resolveConfig({ currencySymbol: "  CHF " }).config.currencySymbol, "CHF");
+});
+
+test("line bets default to on; false switches them off", () => {
+  assert.equal(DEFAULT_CONFIG.lineBets, true);
+  assert.equal(resolveConfig({}).config.lineBets, true);
+  const { config, warnings } = resolveConfig({ lineBets: false });
+  assert.equal(config.lineBets, false);
+  assert.deepEqual(warnings, []);
+});
+
+test("lineBets accepts only a real boolean - the string \"false\" is a warned typo", () => {
+  for (const bad of ["false", 0, null, "no"]) {
+    const { config, warnings } = resolveConfig({ lineBets: bad });
+    assert.equal(config.lineBets, true, `${JSON.stringify(bad)} must fall back to the default`);
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes("lineBets"), "the warning names the key");
+  }
+});
+
+test("an invalid lineBets leaves valid siblings untouched", () => {
+  const { config } = resolveConfig({ lineBets: "off", baseStakeNumber: 2, currencySymbol: "CHF" });
+  assert.equal(config.baseStakeNumber, 2);
+  assert.equal(config.currencySymbol, "CHF");
 });
