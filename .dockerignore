@@ -1,0 +1,14 @@
+.git/
+.github/
+.specify/
+.claude/
+specs/
+tests/
+node_modules/
+*.log
+.env*
+.DS_Store
+docker-compose.yml
+Dockerfile*
+.dockerignore
+README.md

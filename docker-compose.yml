@@ -1,0 +1,13 @@
+services:
+  roulette:
+    image: nginx:alpine
+    container_name: roulette-helper
+    ports:
+      - "8080:80"
+    volumes:
+      # Source tree is served verbatim. Edit public/config.js and reload the
+      # tablet - no rebuild, no restart. Read-only: the container can never
+      # write back into the repository.
+      - ./public:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
